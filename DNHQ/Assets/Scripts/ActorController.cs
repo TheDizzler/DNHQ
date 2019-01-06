@@ -9,53 +9,41 @@ public class ActorController : MonoBehaviour
 {
 	private enum HeroTurnState
 	{
-		NotMyTurn = -1, WaitingForCommand, MoveCommand, AttackCommand, EndingTurn
+		NotMyTurn = -1,
+		WaitingForCommand, MoveCommand, AttackCommand,
+		Moving, EndingTurn,
 	}
-
-	public new Camera camera;
-	public TurnManager turnManager;
-	public bool myTurn = false;
 
 	public float maxMove = 5;
 	[HideInInspector]
-	public float moveLeft;
+	public float moveRemaining;
 
-	[SerializeField] private Material material = null;
-	public LineRenderer closeLine;
-	public LineRenderer farLine;
-	public GameObject destinationMarker;
+	private Camera mainCamera = null;
+	private TurnManager turnManager = null;
+	[SerializeField] private Renderer meshRenderer = null;
+	private TargetMarkerController targetMarker = null;
+	private MoveHelperController moveHelper = null;
 
+	private Vector3 height;
 	private HeroTurnState turnState = HeroTurnState.NotMyTurn;
 
-
 	public List<Command> commands = new List<Command>();
-
-
-	public class MoveCommand : Command
-	{
-		const string name = "Move";
-		ActorController actor;
-		public MoveCommand(ActorController actr)
-		{
-			actor = actr;
-		}
-
-		public string Name()
-		{
-			return name;
-		}
-
-		public void Act()
-		{
-			actor.MoveAction();
-		}
-	}
+	private Command moveCommand;
 
 
 	public void Awake()
 	{
+		mainCamera = FindObjectOfType<Camera>();
+		turnManager = FindObjectOfType<TurnManager>();
 		turnManager.Register(this);
-		commands.Add(new MoveCommand(this));
+		moveHelper = FindObjectOfType<MoveHelperController>();
+		targetMarker = FindObjectOfType<TargetMarkerController>();
+		
+		moveCommand = new MoveCommand(this);
+		commands.Add(moveCommand);
+		commands.Add(new AttackCommand(this));
+
+		height = new Vector3(0, transform.position.y, 0);
 	}
 
 	public void OnDestroy()
@@ -67,26 +55,41 @@ public class ActorController : MonoBehaviour
 	{
 		switch (turnState)
 		{
+			case HeroTurnState.AttackCommand:
+				if (Input.GetMouseButtonDown(1))
+				{
+					CancelCommand();
+				}
+				break;
 			case HeroTurnState.MoveCommand:
 				RaycastHit hit;
-				Ray ray = camera.ScreenPointToRay(Input.mousePosition);
+				Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
 
-				if (Physics.Raycast(ray, out hit))
+				if (Input.GetMouseButtonDown(1))
+				{
+					CancelCommand();
+				}
+				else if (Physics.Raycast(ray, out hit))
 				{
 					Transform objectFound = hit.transform;
 					if (objectFound.CompareTag("Ground"))
 					{
-						CreateLineToTarget(hit.point, transform.position, moveLeft);
-						destinationMarker.transform.localPosition = hit.point;
+						moveHelper.CreateLineToTarget(hit.point,
+							transform.position - height, moveRemaining, true);
 
 						if (Input.GetMouseButtonDown(0))
 						{
-							if (moveLeft > 0)
+							if (moveRemaining > 0)
 							{
 								// move
 								StartCoroutine(MoveTo(hit.point));
 							}
 						}
+					}
+					else
+					{
+						moveHelper.CreateLineToTarget(hit.point,
+							transform.position - height, moveRemaining, false);
 					}
 				}
 
@@ -136,28 +139,70 @@ public class ActorController : MonoBehaviour
 		//}
 	}
 
+	public void TakeTurn()
+	{
+		SetSelected(true);
+		turnState = HeroTurnState.WaitingForCommand;
+		moveRemaining = maxMove;
+
+		turnManager.EnablePlayerInput();
+		turnManager.UpdateCurrentActorHUD();
+	}
+
+	public void AttackAction()
+	{
+		if (turnState != HeroTurnState.WaitingForCommand)
+		{
+			CancelCommand();
+		}
+
+		turnState = HeroTurnState.AttackCommand;
+
+		targetMarker.Activate(true);
+		targetMarker.SetPosition(transform.position - height);
+	}
 
 	public void MoveAction()
 	{
+		if (turnState != HeroTurnState.WaitingForCommand)
+		{
+			CancelCommand();
+		}
+
 		turnState = HeroTurnState.MoveCommand;
-		closeLine.enabled = true;
-		farLine.enabled = true;
-		destinationMarker.SetActive(true);
+		moveHelper.Activate(true, transform.position - height);
 	}
+
+	public void FinishTurn()
+	{
+		if (turnState != HeroTurnState.WaitingForCommand)
+		{
+			CancelCommand();
+		}
+
+		SetSelected(false);
+		turnState = HeroTurnState.NotMyTurn;
+
+		moveHelper.Activate(false, Vector3.zero);
+
+		turnManager.DisablePlayerInput();
+	}
+
 
 	private IEnumerator MoveTo(Vector3 point)
 	{
 		turnManager.DisablePlayerInput();
+		turnState = HeroTurnState.Moving;
 
 		float t = 0;
 		Vector3 startpos = transform.localPosition;
 		Vector3 endpoint;
 		float distanceToPoint = (point - startpos).magnitude;
-		if (distanceToPoint > moveLeft)
+		if (distanceToPoint > moveRemaining)
 		{
 			Vector3 A = startpos;
 			Vector3 B = point;
-			endpoint = (B - A) * (moveLeft / distanceToPoint) + A;
+			endpoint = (B - A) * (moveRemaining / distanceToPoint) + A;
 		}
 		else
 		{
@@ -169,81 +214,42 @@ public class ActorController : MonoBehaviour
 		while (t < 1)
 		{
 			transform.localPosition = Vector3.MoveTowards(startpos, endpoint, t * maxMove);
-			closeLine.SetPosition(0, transform.position);
+			moveHelper.UpdatePosition(transform.position - height);
 			t += Time.deltaTime;
 			yield return null;
 		}
 
+		moveRemaining -= distanceToPoint > moveRemaining ? moveRemaining : distanceToPoint;
+		if (moveRemaining <= 0)
+		{
+			turnManager.DisableCommand(moveCommand);
+		}
 
-		moveLeft -= distanceToPoint > moveLeft ? moveLeft : distanceToPoint;
 		transform.localPosition = endpoint;
-		closeLine.SetPosition(0, transform.position);
-		closeLine.enabled = false;
-		farLine.enabled = false;
-		destinationMarker.SetActive(false);
+
+		CancelCommand();
+	}
+
+	private void CancelCommand()
+	{
+		moveHelper.Activate(false, Vector3.zero);
+		targetMarker.Activate(false);
 
 		turnState = HeroTurnState.WaitingForCommand;
 
 		turnManager.EnablePlayerInput();
 		turnManager.UpdateCurrentActorHUD();
 	}
-
-	public void TakeTurn()
-	{
-		SetSelected(true);
-		turnState = HeroTurnState.WaitingForCommand;
-		moveLeft = maxMove;
-
-		closeLine.SetPosition(0, transform.position);
-
-		turnManager.EnablePlayerInput();
-		turnManager.UpdateCurrentActorHUD();
-	}
-
-	public void FinishTurn()
-	{
-		SetSelected(false);
-		turnState = HeroTurnState.NotMyTurn;
-		
-		closeLine.enabled = false;
-		farLine.enabled = false;
-		destinationMarker.SetActive(false);
-
-		turnManager.DisablePlayerInput();
-	}
-
 
 	private void SetSelected(bool selected)
 	{
-		myTurn = selected;
-		if (myTurn)
+		if (selected)
 		{
-			material.color = Color.red;
+			meshRenderer.sharedMaterial.color = Color.red;
 		}
 		else
 		{
-			material.color = Color.white;
-		}
-	}
-
-
-	public void CreateLineToTarget(Vector3 targetPos, Vector3 startPoint, float maxMove)
-	{
-		float distanceToPoint = (targetPos - startPoint).magnitude;
-		if (distanceToPoint > maxMove)
-		{
-			Vector3 A = startPoint;
-			Vector3 B = targetPos;
-			Vector3 P = (B - A) * (maxMove / distanceToPoint) + A;
-			closeLine.SetPosition(1, P);
-			farLine.SetPosition(0, P);
-			farLine.SetPosition(1, targetPos);
-		}
-		else
-		{
-			closeLine.SetPosition(1, targetPos);
-			farLine.SetPosition(0, startPoint);
-			farLine.SetPosition(1, startPoint);
+			meshRenderer.sharedMaterial.color = Color.white;
 		}
 	}
 }

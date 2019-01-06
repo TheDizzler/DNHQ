@@ -13,7 +13,7 @@ public class CommandListController : MonoBehaviour
 	public void SetCommands(List<Command> commands)
 	{
 		for (int i = commandObjects.Count - 2; i >= 0; --i)
-		{
+		{ // -2 to prevent from destroying the Universal End Turn command.
 			Destroy(commandObjects[i]);
 		}
 
@@ -33,5 +33,16 @@ public class CommandListController : MonoBehaviour
 
 		commandObjects.Add(turnDoneButton);
 		turnDoneButton.transform.SetSiblingIndex(commandObjects.Count + 1);
+	}
+
+	public void Disable(Command command)
+	{
+		foreach (GameObject c in commandObjects)
+		{
+			if (c.name == command.Name())
+			{
+				c.GetComponent<Button>().interactable = false;
+			}
+		}
 	}
 }
