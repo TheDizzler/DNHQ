@@ -23,12 +23,18 @@ public class ActorController : MonoBehaviour
 	[SerializeField] private Renderer meshRenderer = null;
 	private TargetMarkerController targetMarker = null;
 	private MoveHelperController moveHelper = null;
+	private TargetArrowController targetArrow = null;
 
 	private Vector3 height;
 	private HeroTurnState turnState = HeroTurnState.NotMyTurn;
 
 	public List<Command> commands = new List<Command>();
 	private Command moveCommand;
+
+	private List<GameObject> targets = new List<GameObject>();
+	private RaycastHit hit;
+	private Ray ray;
+	private GameObject currentTarget;
 
 
 	public void Awake()
@@ -38,7 +44,8 @@ public class ActorController : MonoBehaviour
 		turnManager.Register(this);
 		moveHelper = FindObjectOfType<MoveHelperController>();
 		targetMarker = FindObjectOfType<TargetMarkerController>();
-		
+		targetArrow = FindObjectOfType<TargetArrowController>();
+
 		moveCommand = new MoveCommand(this);
 		commands.Add(moveCommand);
 		commands.Add(new AttackCommand(this));
@@ -59,11 +66,30 @@ public class ActorController : MonoBehaviour
 				if (Input.GetMouseButtonDown(1))
 				{
 					CancelCommand();
+					break;
 				}
+
+				ray = mainCamera.ScreenPointToRay(Input.mousePosition);
+
+				RaycastHit[] hits = Physics.RaycastAll(ray, Mathf.Infinity);
+
+				for (int i = 0; i < hits.Length; i++)
+				{
+					Transform objectFound = hits[i].transform;
+					if (targets.Contains(objectFound.gameObject))
+					{
+						if (objectFound.gameObject != currentTarget)
+						{
+							currentTarget = objectFound.gameObject;
+							Debug.Log("I found " + objectFound.name);
+							targetArrow.Show(currentTarget);
+						}
+					}
+				}
+
 				break;
 			case HeroTurnState.MoveCommand:
-				RaycastHit hit;
-				Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
+				ray = mainCamera.ScreenPointToRay(Input.mousePosition);
 
 				if (Input.GetMouseButtonDown(1))
 				{
@@ -98,45 +124,6 @@ public class ActorController : MonoBehaviour
 			default:
 				break;
 		}
-		//if (Input.GetMouseButtonDown(0))
-		//{
-		//	RaycastHit hit;
-		//	Ray ray = camera.ScreenPointToRay(Input.mousePosition);
-
-		//	if (Physics.Raycast(ray, out hit))
-		//	{
-		//		Transform objectHit = hit.transform;
-		//		if (objectHit == transform)
-		//		{
-		//			Debug.Log("That's me!");
-		//		}
-		//		else if (objectHit.CompareTag("Ground") && !moving && moveLeft > 0)
-		//		{
-		//			// move
-		//			StartCoroutine(MoveTo(hit.point));
-		//		}
-		//		else
-		//		{
-		//			Debug.Log("That's " + objectHit.name + " *spit*");
-		//		}
-		//	}
-		//}
-		//else if (!moving)
-		//{
-		//	RaycastHit hit;
-		//	Ray ray = camera.ScreenPointToRay(Input.mousePosition);
-
-		//	if (Physics.Raycast(ray, out hit))
-		//	{
-		//		Transform objectFound = hit.transform;
-		//		if (objectFound.CompareTag("Ground"))
-		//		{
-		//			CreateLineToTarget(hit.point, transform.position, moveLeft);
-		//			destinationMarker.transform.localPosition = hit.point;
-
-		//		}
-		//	}
-		//}
 	}
 
 	public void TakeTurn()
@@ -160,7 +147,20 @@ public class ActorController : MonoBehaviour
 
 		targetMarker.Activate(true);
 		targetMarker.SetPosition(transform.position - height);
+
+		// find targets in hit area
+		CapsuleCollider capsule = targetMarker.GetComponent<CapsuleCollider>();
+		Collider[] colliders = OverlapCollider(capsule);
+		foreach (Collider coll in colliders)
+		{
+			if (coll.gameObject.layer == Layers.Actors && coll.gameObject != this.gameObject)
+			{
+				coll.gameObject.GetComponent<MeshRenderer>().sharedMaterial.color = Color.blue;
+				targets.Add(coll.gameObject);
+			}
+		}
 	}
+
 
 	public void MoveAction()
 	{
@@ -234,6 +234,18 @@ public class ActorController : MonoBehaviour
 	{
 		moveHelper.Activate(false, Vector3.zero);
 		targetMarker.Activate(false);
+		if (targets.Count != 0)
+		{
+			foreach (GameObject target in targets)
+			{
+				target.GetComponent<MeshRenderer>().sharedMaterial.color = Color.white;
+			}
+
+			targets.Clear();
+			targetArrow.Hide();
+			currentTarget = null;
+		}
+
 
 		turnState = HeroTurnState.WaitingForCommand;
 
@@ -251,5 +263,51 @@ public class ActorController : MonoBehaviour
 		{
 			meshRenderer.sharedMaterial.color = Color.white;
 		}
+	}
+
+
+	private Collider[] OverlapCollider(CapsuleCollider capsule,
+		int layerMask = Physics.DefaultRaycastLayers,
+		QueryTriggerInteraction queryTriggerInteraction = QueryTriggerInteraction.UseGlobal)
+	{
+		var center = capsule.transform.TransformPoint(capsule.center);
+		float radius = 0f;
+		float height = 0f;
+		Vector3 lossyScale = AbsVec3(capsule.transform.lossyScale);
+		Vector3 dir = Vector3.zero;
+
+		switch (capsule.direction)
+		{
+			case 0: // x
+				radius = Mathf.Max(lossyScale.y, lossyScale.z) * capsule.radius;
+				height = lossyScale.x * capsule.height;
+				dir = capsule.transform.TransformDirection(Vector3.right);
+				break;
+			case 1: // y
+				radius = Mathf.Max(lossyScale.x, lossyScale.z) * capsule.radius;
+				height = lossyScale.y * capsule.height;
+				dir = capsule.transform.TransformDirection(Vector3.up);
+				break;
+			case 2: // z
+				radius = Mathf.Max(lossyScale.x, lossyScale.y) * capsule.radius;
+				height = lossyScale.z * capsule.height;
+				dir = capsule.transform.TransformDirection(Vector3.forward);
+				break;
+		}
+
+		if (height < radius * 2f)
+		{
+			dir = Vector3.zero;
+		}
+
+		Vector3 point0 = center + dir * (height * 0.5f - radius);
+		Vector3 point1 = center - dir * (height * 0.5f - radius);
+
+		return Physics.OverlapCapsule(point0, point1, radius, layerMask, queryTriggerInteraction);
+	}
+
+	private static Vector3 AbsVec3(Vector3 v)
+	{
+		return new Vector3(Mathf.Abs(v.x), Mathf.Abs(v.y), Mathf.Abs(v.z));
 	}
 }
