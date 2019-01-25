@@ -2,6 +2,16 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+public class Stats
+{
+	// base chance to hit = weapon skill + agility
+	// base damage = weapon damage + strength
+	
+	// base chance for dodge = dodge skill + agility (requires free space to enter)
+	// base chance for parry = weapon/shield skill + agility
+	// base chance for block = shield/armor skill  + strength
+}
+
 /// <summary>
 /// Every object that gets a turn must have this.
 /// </summary>
@@ -11,6 +21,7 @@ public class ActorController : MonoBehaviour
 	{
 		NotMyTurn = -1,
 		WaitingForCommand, MoveCommand, AttackCommand,
+		ResolvingCombat,
 		Moving, EndingTurn,
 	}
 
@@ -20,16 +31,21 @@ public class ActorController : MonoBehaviour
 
 	private Camera mainCamera = null;
 	private TurnManager turnManager = null;
+
 	[SerializeField] private Renderer meshRenderer = null;
 	private TargetMarkerController targetMarker = null;
+
 	private MoveHelperController moveHelper = null;
 	private TargetArrowController targetArrow = null;
 
 	private Vector3 height;
 	private HeroTurnState turnState = HeroTurnState.NotMyTurn;
 
-	public List<Command> commands = new List<Command>();
-	private Command moveCommand;
+	public List<ICommand> commands = new List<ICommand>();
+	public List<DefendCommand> defenceCommands = new List<DefendCommand>();
+
+	private MoveCommand moveCommand;
+	private AttackCommand attackCommand;
 
 	private List<GameObject> targets = new List<GameObject>();
 	private RaycastHit hit;
@@ -48,9 +64,23 @@ public class ActorController : MonoBehaviour
 
 		moveCommand = new MoveCommand(this);
 		commands.Add(moveCommand);
-		commands.Add(new AttackCommand(this));
+		attackCommand = new AttackCommand(this);
+		commands.Add(attackCommand);
+
+		defenceCommands.Add(new DefendCommand(this, "Dodge"));
+		defenceCommands.Add(new DefendCommand(this, "Parry"));
+		defenceCommands.Add(new DefendCommand(this, "Block"));
 
 		height = new Vector3(0, transform.position.y, 0);
+	}
+
+	public void CombatResolved()
+	{
+		turnState = HeroTurnState.WaitingForCommand;
+		turnManager.UpdateCurrentActorHUD();
+
+		turnManager.DisableCommand(attackCommand);
+		turnManager.CombatResolved();
 	}
 
 	public void OnDestroy()
@@ -68,12 +98,18 @@ public class ActorController : MonoBehaviour
 					CancelCommand();
 					break;
 				}
+				else if (Input.GetMouseButtonDown(0) && currentTarget != null)
+				{
+					// attack!
+					turnManager.CommenceAttackSequence(this, currentTarget.GetComponent<ActorController>());
+					turnState = HeroTurnState.ResolvingCombat;
+				}
 
 				ray = mainCamera.ScreenPointToRay(Input.mousePosition);
 
 				RaycastHit[] hits = Physics.RaycastAll(ray, Mathf.Infinity);
 
-				for (int i = 0; i < hits.Length; i++)
+				for (int i = 0; i < hits.Length; ++i)
 				{
 					Transform objectFound = hits[i].transform;
 					if (targets.Contains(objectFound.gameObject))
@@ -86,6 +122,7 @@ public class ActorController : MonoBehaviour
 						}
 					}
 				}
+
 
 				break;
 			case HeroTurnState.MoveCommand:
@@ -186,6 +223,12 @@ public class ActorController : MonoBehaviour
 		moveHelper.Activate(false, Vector3.zero);
 
 		turnManager.DisablePlayerInput();
+	}
+
+
+	public List<DefendCommand> GetDefenceOptions()
+	{
+		return defenceCommands;
 	}
 
 

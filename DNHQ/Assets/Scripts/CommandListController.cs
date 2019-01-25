@@ -10,7 +10,7 @@ public class CommandListController : MonoBehaviour
 	[SerializeField] private GameObject turnDoneButton = null;
 
 
-	public void SetCommands(List<Command> commands)
+	public void SetCommands(List<ICommand> commands)
 	{
 		for (int i = commandObjects.Count - 2; i >= 0; --i)
 		{ // -2 to prevent from destroying the Universal End Turn command.
@@ -35,7 +35,7 @@ public class CommandListController : MonoBehaviour
 		turnDoneButton.transform.SetSiblingIndex(commandObjects.Count + 1);
 	}
 
-	public void Disable(Command command)
+	public void Disable(ICommand command)
 	{
 		foreach (GameObject c in commandObjects)
 		{

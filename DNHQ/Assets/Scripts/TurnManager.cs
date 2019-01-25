@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -6,9 +7,12 @@ public class TurnManager : MonoBehaviour
 {
 	[SerializeField] private Text nameText = null;
 	[SerializeField] private Text moveText = null;
+	[SerializeField] private Text dialogText = null;
 	[SerializeField] private CommandListController commandList = null;
 	[SerializeField] private GameObject commandPanel = null;
 	[SerializeField] private Canvas canvas = null;
+
+	[SerializeField] private CombatManager combatManager = null;
 
 	private List<ActorController> actors = new List<ActorController>();
 	private int currentActorIndex = -1;
@@ -74,8 +78,19 @@ public class TurnManager : MonoBehaviour
 		commandPanel.SetActive(true);
 	}
 
-	public void DisableCommand(Command command)
+	public void DisableCommand(ICommand command)
 	{
 		commandList.Disable(command);
+	}
+
+	public void CommenceAttackSequence(ActorController attacker, ActorController defender)
+	{
+		commandPanel.SetActive(false);
+		combatManager.CommenceAttackSequence(attacker, defender);
+	}
+
+	public void CombatResolved()
+	{
+		commandPanel.SetActive(true);
 	}
 }
