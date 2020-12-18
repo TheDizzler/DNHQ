@@ -18,8 +18,8 @@ public class PlayerController : MonoBehaviour
 	public Sprite destinationOK;
 	public GameObject destinationMarker;
 
-	private Transform selectedTarget;
-	private HeroController selectedHero;
+	private Transform selectedTarget = null;
+	private HeroController selectedHero = null;
 
 	public Material lineMat;
 

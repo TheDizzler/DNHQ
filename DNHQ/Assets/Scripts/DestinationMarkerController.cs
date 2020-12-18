@@ -4,18 +4,18 @@ public class DestinationMarkerController : MonoBehaviour
 {
 	[SerializeField] private Sprite destinationNG = null;
 	[SerializeField] private Sprite destinationOK = null;
-	[SerializeField] private SpriteRenderer renderer = null;
+	[SerializeField] private SpriteRenderer spriteRenderer = null;
 
 	public void SetDestination(Vector3 destination, bool isValidDestination)
 	{
 		transform.localPosition = destination;
 		if (isValidDestination)
 		{
-			renderer.sprite = destinationOK;
+			spriteRenderer.sprite = destinationOK;
 		}
 		else
 		{
-			renderer.sprite = destinationNG;
+			spriteRenderer.sprite = destinationNG;
 		}
 	}
 

@@ -4,7 +4,7 @@ using UnityEngine;
 
 public class Stats
 {
-	// base chance to hit = weapon skill + agility
+	// base chance to hit = weapon skill + agility ~ 75%?
 	// base damage = weapon damage + strength
 	
 	// base chance for dodge = dodge skill + agility (requires free space to enter)
@@ -117,7 +117,6 @@ public class ActorController : MonoBehaviour
 						if (objectFound.gameObject != currentTarget)
 						{
 							currentTarget = objectFound.gameObject;
-							Debug.Log("I found " + objectFound.name);
 							targetArrow.Show(currentTarget);
 						}
 					}

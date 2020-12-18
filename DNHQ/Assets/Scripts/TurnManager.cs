@@ -7,7 +7,6 @@ public class TurnManager : MonoBehaviour
 {
 	[SerializeField] private Text nameText = null;
 	[SerializeField] private Text moveText = null;
-	[SerializeField] private Text dialogText = null;
 	[SerializeField] private CommandListController commandList = null;
 	[SerializeField] private GameObject commandPanel = null;
 	[SerializeField] private Canvas canvas = null;

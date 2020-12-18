@@ -50,7 +50,7 @@ public class DefendCommand : ICommand
 {
 	string name = "DefendType";
 	public ActorController actor;
-	public double SuccessRate;
+	public float SuccessRate;
 	private CombatManager combatManager;
 
 
@@ -70,12 +70,17 @@ public class DefendCommand : ICommand
 		return name;
 	}
 
+	public string Verbed()
+	{
+		return name + "ed";
+	}
+
 	public void SetCallback(CombatManager cmbtMang)
 	{
 		combatManager = cmbtMang;
 	}
 
-	public void SetSuccessRate(double chance)
+	public void SetSuccessRate(float chance)
 	{
 		SuccessRate = chance;
 	}

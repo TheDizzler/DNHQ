@@ -12,7 +12,8 @@ public class CombatManager : MonoBehaviour
 	}
 
 	public CombatState combatState;
-
+	public float MinToHitChance = .5f;
+	public float MaxToHitChance = .95f;
 
 	[SerializeField] private Text dialogText = null;
 	[SerializeField] private GameObject defendCommandPanel = null;
@@ -23,15 +24,15 @@ public class CombatManager : MonoBehaviour
 	{
 		attacker = atkr;
 		defender = dfndr;
-		dialogText.text += atkr.name + " attacks " + defender.name + "!";
+		dialogText.text += "\n" + atkr.name + " attacks " + defender.name + "!";
 
 		List<DefendCommand> commands = defender.GetDefenceOptions();
-		double rate = .4f;
+		float rate = .4f;
 		foreach (DefendCommand command in commands)
 		{
 			command.SetCallback(this);
 			// calculate odds of success here
-			command.SetSuccessRate(rate += .1);
+			command.SetSuccessRate(rate += .1f);
 		}
 
 		defendList.SetCommands(commands);
@@ -44,10 +45,24 @@ public class CombatManager : MonoBehaviour
 	{
 		combatState = CombatState.ResolvingCombat;
 		defendCommandPanel.SetActive(false);
-		dialogText.text += defender.name + " tries to " + defendCommand.Name() + "!";
+		dialogText.text += "\n" + defender.name + " tries to " + defendCommand.Name() + "!";
 
 		// do calculations
-
+		float baseToHit = .75f;
+		float baseToDodge = defendCommand.SuccessRate;
+		Debug.Log(baseToHit - baseToDodge);
+		float toHitAdjusted = Mathf.Clamp(baseToHit - baseToDodge, MinToHitChance, MaxToHitChance);
+		dialogText.text += "\n Total chance to hit is " + toHitAdjusted;
+		float rand = Random.Range(0f, 1);
+		dialogText.text += "\n " + attacker.name + " rolled a " + rand;
+		if (rand <= toHitAdjusted)
+		{
+			dialogText.text += "\n " + attacker.name + " Hit!";
+		}
+		else
+		{
+			dialogText.text += "\n " + defender.name + " " + defendCommand.Verbed() + " the attack!";
+		}
 		// resolve counter attacks
 
 		// calculate damage, if any
